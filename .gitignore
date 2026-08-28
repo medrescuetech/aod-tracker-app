@@ -1,0 +1,22 @@
+# Active package has its own repo
+clinic-tracker-app/
+
+# Archived / legacy tracker versions
+aod-tracker-app/
+clinical-ai-sidebar/
+V1/
+V2/
+_archive/
+
+# Backups and runtime files
+Backups/
+.venv/
+
+# Data files
+*.xlsx
+*.pdf
+*.zip
+
+# OS files
+Thumbs.db
+.DS_Store
