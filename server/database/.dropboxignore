@@ -1,0 +1,6 @@
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.db.tmp
+db-config.json

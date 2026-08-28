@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AOD Tracker Server</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    html, body {
+      width:100%; height:100%; overflow:hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: clamp(12px, 1.4vw, 15px);
+      background:#f0f4f8; color:#1f2937;
+    }
+    body { display:grid; grid-template-rows: auto auto 1fr auto; }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+      color:white; padding:0.6em 1em; text-align:center;
+    }
+    .header h1 { font-size:1.2em; font-weight:700; line-height:1.2; }
+    .header p  { opacity:.85; font-size:0.72em; margin-top:0.1em; }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      display:flex; background:#1e3a8a; border-bottom:2px solid #1e40af;
+    }
+    .tab-bar button {
+      flex:1; padding:0.45em 0.5em; border:none; background:transparent;
+      color:rgba(255,255,255,0.65); font-size:0.8em; font-weight:600;
+      cursor:pointer; transition:background 0.15s, color 0.15s;
+      border-bottom:2px solid transparent; margin-bottom:-2px;
+    }
+    .tab-bar button:hover   { background:rgba(255,255,255,0.08); color:white; }
+    .tab-bar button.active  { color:white; border-bottom-color:#60a5fa; background:rgba(255,255,255,0.1); }
+
+    /* ── Tab panels ── */
+    .tab-panel { display:none; overflow-y:auto; flex-direction:column;
+                 padding: clamp(8px,2vw,16px) clamp(10px,2.5vw,20px);
+                 gap: clamp(7px,1.6vw,12px); }
+    .tab-panel.active { display:flex; }
+
+    /* ── Shared cards ── */
+    .card {
+      background:white; border-radius:9px; padding:0.65em 0.9em;
+      box-shadow:0 1px 5px rgba(0,0,0,0.08);
+    }
+    .card-label {
+      font-size:0.65em; color:#6b7280; text-transform:uppercase;
+      letter-spacing:0.05em; margin-bottom:0.35em;
+    }
+
+    /* ── Status card ── */
+    .status-card { display:flex; align-items:center; gap:0.8em; }
+    .status-indicator {
+      width:2.4em; height:2.4em; border-radius:50%; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      font-size:1em; transition:background .3s,color .3s;
+    }
+    .status-indicator.starting { background:#fef3c7; color:#f59e0b; animation:pulse 1.5s infinite; }
+    .status-indicator.running  { background:#d1fae5; color:#10b981; }
+    .status-indicator.stopped  { background:#fee2e2; color:#ef4444; }
+    .status-indicator.error    { background:#fee2e2; color:#ef4444; animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(.93);opacity:.8} }
+    .status-text { font-size:1em; font-weight:700; }
+
+    /* ── URL box ── */
+    .url-box {
+      background:#f3f4f6; border:2px dashed #d1d5db; border-radius:6px;
+      padding:0.45em 0.65em; text-align:center; font-family:monospace;
+      font-size:0.85em; color:#374151; word-break:break-all; line-height:1.4;
+    }
+    .url-box.active  { border-color:#3b82f6; background:#eff6ff; cursor:pointer; }
+    .url-box.disabled{ opacity:.5; cursor:not-allowed; }
+
+    /* ── Buttons ── */
+    .buttons { display:flex; gap:0.45em; }
+    button {
+      flex:1; padding:0.5em 0.75em; border:none; border-radius:7px;
+      font-size:0.85em; font-weight:600; cursor:pointer;
+      transition:background .18s, opacity .18s; white-space:nowrap;
+    }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .btn-primary   { background:#3b82f6; color:white; }
+    .btn-primary:hover:not(:disabled)   { background:#2563eb; }
+    .btn-secondary { background:#e5e7eb; color:#374151; }
+    .btn-secondary:hover:not(:disabled) { background:#d1d5db; }
+    .btn-danger    { background:#ef4444; color:white; }
+    .btn-danger:hover:not(:disabled)    { background:#dc2626; }
+    .btn-tray      { background:#6b7280; color:white; }
+    .btn-tray:hover:not(:disabled)      { background:#4b5563; }
+    .btn-sm {
+      flex:none; padding:0.3em 0.6em; font-size:0.78em; font-weight:600;
+      border:none; border-radius:5px; cursor:pointer;
+      background:#e5e7eb; color:#374151; transition:background .15s;
+    }
+    .btn-sm:hover { background:#d1d5db; }
+    .btn-sm.blue  { background:#dbeafe; color:#1d4ed8; }
+    .btn-sm.blue:hover { background:#bfdbfe; }
+
+    /* ── Live console (server tab) ── */
+    .live-console {
+      background:#111827; color:#d1d5db;
+      padding:0.45em 0.65em; border-radius:7px;
+      font-family:'Consolas','Courier New',monospace;
+      font-size:clamp(9px,1.1vw,11px); line-height:1.45;
+      overflow-y:auto; height:clamp(70px,16vh,120px);
+    }
+    .live-console .log-line { margin-bottom:1px; }
+
+    /* ── Log file list ── */
+    .log-list { list-style:none; }
+    .log-list li {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0.38em 0.5em; border-bottom:1px solid #f3f4f6; gap:0.5em;
+    }
+    .log-list li:last-child { border-bottom:none; }
+    .log-name { font-family:monospace; font-size:0.82em; color:#374151; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .log-size { font-size:0.72em; color:#9ca3af; flex-shrink:0; }
+    .log-actions { display:flex; gap:0.3em; flex-shrink:0; }
+
+    /* ── Log viewer ── */
+    .log-viewer {
+      background:#0f172a; color:#e2e8f0; border-radius:7px;
+      font-family:'Consolas','Courier New',monospace;
+      font-size:clamp(9px,1vw,11px); line-height:1.5;
+      overflow-y:auto; flex:1; min-height:120px;
+      padding:0.5em 0.65em; white-space:pre-wrap; word-break:break-all;
+    }
+    .log-viewer .lv-error { color:#f87171; }
+    .log-viewer .lv-warn  { color:#fbbf24; }
+    .log-viewer .lv-info  { color:#93c5fd; }
+    .log-viewer .lv-plain { color:#cbd5e1; }
+
+    /* ── Storage rows ── */
+    .storage-row {
+      display:grid; grid-template-columns:1fr auto;
+      align-items:center; gap:0.5em; padding:0.5em 0;
+      border-bottom:1px solid #f3f4f6;
+    }
+    .storage-row:last-child { border-bottom:none; }
+    .storage-label { font-size:0.82em; font-weight:600; color:#374151; }
+    .storage-path  { font-family:monospace; font-size:0.72em; color:#6b7280;
+                     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .storage-size  { font-size:0.72em; color:#9ca3af; white-space:nowrap; }
+    .storage-btns  { display:flex; gap:0.3em; align-items:center; }
+
+    /* ── Footer ── */
+    .footer {
+      text-align:center; font-size:0.7em; color:#9ca3af;
+      padding:0.35em 0.5em; border-top:1px solid #e5e7eb; background:#f9fafb;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>🩺 AOD Tracker</h1>
+    <p>Clinic Server Manager</p>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="active" onclick="switchTab('server')">⚙ Server</button>
+    <button onclick="switchTab('logs')">📋 Logs</button>
+    <button onclick="switchTab('storage')">💾 Storage</button>
+  </div>
+
+  <!-- ══════════════════ SERVER TAB ══════════════════ -->
+  <div class="tab-panel active" id="tab-server">
+
+    <div class="card status-card">
+      <div class="status-indicator stopped" id="statusIcon">⏹️</div>
+      <div class="status-text" id="statusText" style="color:#ef4444">Stopped</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Local Access</div>
+      <div class="url-box disabled" id="urlBox">Server not running</div>
+    </div>
+
+    <div class="card" id="networkSection" style="display:none">
+      <div class="card-label">Network Access — share with others</div>
+      <div class="url-box disabled" id="networkUrlBox" style="font-weight:600"></div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-primary" id="startBtn" onclick="startServer()">▶ Start</button>
+      <button class="btn-danger"  id="stopBtn"  onclick="stopServer()" disabled>■ Stop</button>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-secondary" onclick="openBrowser()" id="openBtn" disabled>Open in Browser</button>
+      <button class="btn-secondary" onclick="openFolder()">App Folder</button>
+    </div>
+
+    <div class="buttons">
+      <button class="btn-tray" onclick="minimiseToTray()">▼ Minimise to Tray</button>
+    </div>
+
+    <div class="card-label" style="margin-top:0.2em">Live Console</div>
+    <div class="live-console" id="logSection"></div>
+
+  </div>
+
+  <!-- ══════════════════ LOGS TAB ══════════════════ -->
+  <div class="tab-panel" id="tab-logs">
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5em">
+        <span style="font-size:0.82em;font-weight:600;color:#374151">Log Files</span>
+        <div style="display:flex;gap:0.4em">
+          <button class="btn-sm blue" onclick="openLogsFolder()">📂 Open Folder</button>
+          <button class="btn-sm" onclick="refreshLogList()">↻ Refresh</button>
+        </div>
+      </div>
+      <ul class="log-list" id="logFileList">
+        <li style="color:#9ca3af;font-size:0.82em;padding:0.5em">Loading…</li>
+      </ul>
+    </div>
+
+    <!-- Inline viewer -->
+    <div id="logViewerWrap" style="display:none;flex-direction:column;gap:0.4em;flex:1;min-height:0">
+      <div style="display:flex;align-items:center;gap:0.5em">
+        <span id="logViewerTitle" style="font-size:0.8em;font-weight:600;color:#374151;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+        <button class="btn-sm" onclick="closeLogViewer()">✕ Close</button>
+        <button class="btn-sm blue" onclick="openCurrentLogNotepad()">📝 Notepad</button>
+      </div>
+      <div class="log-viewer" id="logViewer"></div>
+      <div style="font-size:0.7em;color:#6b7280" id="logViewerMeta"></div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════ STORAGE TAB ══════════════════ -->
+  <div class="tab-panel" id="tab-storage">
+
+    <div class="card">
+      <div style="font-size:0.82em;font-weight:600;color:#374151;margin-bottom:0.6em">Storage Locations</div>
+      <div id="storageRows">
+        <div style="color:#9ca3af;font-size:0.82em;padding:0.4em">Loading…</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:0.82em;font-weight:600;color:#374151;margin-bottom:0.5em">Environment / Config</div>
+      <div id="envContent" style="font-family:monospace;font-size:0.75em;color:#374151;
+           background:#f8fafc;border-radius:5px;padding:0.5em;white-space:pre-wrap;
+           max-height:120px;overflow-y:auto;border:1px solid #e5e7eb">Loading…</div>
+      <div style="display:flex;gap:0.4em;margin-top:0.5em">
+        <button class="btn-sm blue" onclick="openEnvNotepad()">📝 Edit in Notepad</button>
+        <button class="btn-sm" onclick="refreshStorage()">↻ Refresh</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Server keeps running when hidden &nbsp;·&nbsp; right-click tray icon for actions
+  </div>
+
+  <script>
+    const { ipcRenderer, shell } = require('electron');
+
+    // ── Tab switching ───────────────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      const idx = { server:0, logs:1, storage:2 }[name];
+      document.querySelectorAll('.tab-bar button')[idx].classList.add('active');
+      if (name === 'logs')    refreshLogList();
+      if (name === 'storage') refreshStorage();
+    }
+
+    // ── Server tab ──────────────────────────────────────────────────────────
+    let currentStatus = 'stopped';
+    let serverUrl = null;
+
+    ipcRenderer.on('status-update', (event, data) => { updateUI(data); });
+    ipcRenderer.on('server-log',    (event, data) => { addLog(data.type, data.message); });
+
+    function updateUI(data) {
+      currentStatus = data.status;
+      serverUrl     = data.url;
+
+      const icon = document.getElementById('statusIcon');
+      icon.className   = 'status-indicator ' + data.status;
+      icon.textContent = data.status === 'running'  ? '✓' :
+                         data.status === 'starting' ? '⟳' :
+                         data.status === 'error'    ? '✗' : '⏹️';
+
+      const txt = document.getElementById('statusText');
+      txt.textContent = data.text;
+      txt.style.color = data.color;
+
+      const urlBox = document.getElementById('urlBox');
+      if (data.url) {
+        urlBox.textContent = data.url;
+        urlBox.className   = 'url-box active';
+        urlBox.onclick     = () => shell.openExternal(data.url);
+      } else {
+        urlBox.textContent = 'Server not running';
+        urlBox.className   = 'url-box disabled';
+        urlBox.onclick     = null;
+      }
+
+      const netSec = document.getElementById('networkSection');
+      const netBox = document.getElementById('networkUrlBox');
+      if (data.networkUrl) {
+        netSec.style.display = '';
+        netBox.textContent   = data.networkUrl;
+        netBox.className     = 'url-box active';
+        netBox.onclick       = () => {
+          require('electron').clipboard.writeText(data.networkUrl);
+          netBox.textContent = 'Copied!';
+          setTimeout(() => { netBox.textContent = data.networkUrl; }, 1500);
+        };
+      } else {
+        netSec.style.display = 'none';
+      }
+
+      document.getElementById('startBtn').disabled = data.status !== 'stopped';
+      document.getElementById('stopBtn').disabled  = data.status === 'stopped' || data.status === 'stopping';
+      document.getElementById('openBtn').disabled  = !data.url;
+    }
+
+    function startServer()    { ipcRenderer.send('start-server'); }
+    function stopServer()     { ipcRenderer.send('stop-server'); }
+    function minimiseToTray() { ipcRenderer.send('minimise-to-tray'); }
+    function openBrowser()    { if (serverUrl) shell.openExternal(serverUrl); }
+    function openFolder()     { ipcRenderer.send('open-folder', ipcRenderer.sendSync('get-app-path')); }
+
+    function addLog(type, message) {
+      const log  = document.getElementById('logSection');
+      const line = document.createElement('div');
+      line.className   = 'log-line';
+      line.style.color = type === 'error' ? '#f87171' : type === 'info' ? '#93c5fd' : '#6ee7b7';
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+      while (log.children.length > 80) log.removeChild(log.firstChild);
+    }
+
+    // ── Logs tab ────────────────────────────────────────────────────────────
+    let currentLogPath = null;
+
+    function fmtSize(b) {
+      if (b == null) return '';
+      if (b < 1024) return b + ' B';
+      if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+      return (b/(1024*1024)).toFixed(2) + ' MB';
+    }
+
+    function refreshLogList() {
+      const files = ipcRenderer.sendSync('list-logs');
+      const ul    = document.getElementById('logFileList');
+      ul.innerHTML = '';
+      if (!files.length) {
+        ul.innerHTML = '<li style="color:#9ca3af;font-size:0.82em;padding:0.5em">No log files found.</li>';
+        return;
+      }
+      for (const f of files) {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span class="log-name" title="${f.path}">${f.name}</span>
+          <span class="log-size">${fmtSize(f.size)}</span>
+          <span class="log-actions">
+            <button class="btn-sm blue" onclick="viewLog('${f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${f.name.replace(/'/g,"\\'")}')">View</button>
+            <button class="btn-sm" onclick="ipcRenderer.send('open-file','${f.path.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">📝</button>
+          </span>`;
+        ul.appendChild(li);
+      }
+    }
+
+    function openLogsFolder() {
+      const paths = ipcRenderer.sendSync('get-paths');
+      ipcRenderer.send('open-folder', paths.logsDir);
+    }
+
+    function viewLog(filePath, name) {
+      currentLogPath = filePath;
+      const result   = ipcRenderer.sendSync('read-log', { filePath, lines: 300 });
+      const viewer   = document.getElementById('logViewer');
+      const wrap     = document.getElementById('logViewerWrap');
+      const title    = document.getElementById('logViewerTitle');
+      const meta     = document.getElementById('logViewerMeta');
+
+      title.textContent = name;
+      meta.textContent  = `Showing last ${result.lines.length} of ${result.total} lines`;
+
+      viewer.innerHTML = '';
+      for (const raw of result.lines) {
+        const div = document.createElement('div');
+        try {
+          const obj = JSON.parse(raw);
+          const lv  = (obj.level || '').toUpperCase();
+          div.className = lv === 'ERROR' || lv === 'FATAL' || lv === 'DB_ERROR' ? 'lv-error'
+                        : lv === 'WARN'  ? 'lv-warn'
+                        : lv === 'INFO' || lv === 'STARTUP' || lv === 'AUDIT' ? 'lv-info'
+                        : 'lv-plain';
+          div.textContent = `[${(obj.timestamp||'').slice(11,19)}] ${lv.padEnd(8)} ${obj.message || raw}${obj.error ? ' — ' + obj.error : ''}`;
+        } catch {
+          div.className   = 'lv-plain';
+          div.textContent = raw;
+        }
+        viewer.appendChild(div);
+      }
+      viewer.scrollTop = viewer.scrollHeight;
+      wrap.style.display = 'flex';
+    }
+
+    function closeLogViewer() {
+      document.getElementById('logViewerWrap').style.display = 'none';
+      currentLogPath = null;
+    }
+
+    function openCurrentLogNotepad() {
+      if (currentLogPath) ipcRenderer.send('open-file', currentLogPath);
+    }
+
+    // ── Storage tab ─────────────────────────────────────────────────────────
+    function refreshStorage() {
+      const p = ipcRenderer.sendSync('get-paths');
+
+      const rows = [
+        { label:'Database',      path: p.dbPath,     size: p.dbSize,         isFile: true,  folder: p.dbDir     },
+        { label:'Uploads',       path: p.uploadsDir,  size: p.uploadsDirSize, isFile: false, folder: p.uploadsDir },
+        { label:'Backups',       path: p.backupsDir,  size: p.backupsDirSize, isFile: false, folder: p.backupsDir },
+        { label:'Logs',          path: p.logsDir,     size: p.logsDirSize,    isFile: false, folder: p.logsDir    },
+        { label:'App Directory', path: p.appDir,      size: null,             isFile: false, folder: p.appDir     },
+      ];
+
+      const container = document.getElementById('storageRows');
+      container.innerHTML = '';
+      for (const r of rows) {
+        const div = document.createElement('div');
+        div.className = 'storage-row';
+        div.innerHTML = `
+          <div>
+            <div class="storage-label">${r.label}</div>
+            <div class="storage-path" title="${r.path}">${r.path}</div>
+          </div>
+          <div class="storage-btns">
+            ${r.size != null ? `<span class="storage-size">${fmtSize(r.size)}</span>` : ''}
+            <button class="btn-sm blue" onclick="ipcRenderer.send('open-folder','${r.folder.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">📂</button>
+          </div>`;
+        container.appendChild(div);
+      }
+
+      // Env file
+      const env = ipcRenderer.sendSync('read-env');
+      const envEl = document.getElementById('envContent');
+      if (env.exists) {
+        envEl.textContent = env.content || '(empty)';
+      } else {
+        envEl.textContent = '(no .env file — defaults are in use)';
+        envEl.style.color = '#9ca3af';
+      }
+    }
+
+    function openEnvNotepad() { ipcRenderer.send('open-env'); }
+
+  </script>
+</body>
+</html>

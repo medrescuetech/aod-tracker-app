@@ -1,0 +1,71 @@
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #0b1220; color: #e8eefc; }
+.app { padding: 16px; max-width: 780px; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: rgba(255,255,255,0.04); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.tray-btn { padding: 6px 10px; font-size: 11px; background: rgba(100,100,255,0.15); border-color: rgba(100,100,255,0.4); }
+h1 { margin: 0; font-size: 18px; }
+.sub { margin-top: 4px; opacity: 0.75; font-size: 12px; }
+.status { padding: 6px 10px; border-radius: 999px; font-size: 12px; border: 1px solid rgba(255,255,255,0.12); }
+.status.running { background: rgba(40,200,120,0.15); border-color: rgba(40,200,120,0.4); }
+.status.stopped { background: rgba(220,60,60,0.15); border-color: rgba(220,60,60,0.4); }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin: 12px 0 0; }
+.tab { padding: 7px 18px; border-radius: 8px 8px 0 0; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.03); color: #e8eefc; cursor: pointer; font-size: 13px; }
+.tab.active { background: rgba(255,255,255,0.07); border-bottom-color: transparent; }
+.tab:hover:not(.active) { background: rgba(255,255,255,0.06); }
+.tab-panel { border: 1px solid rgba(255,255,255,0.08); border-radius: 0 10px 10px 10px; padding: 14px; background: rgba(255,255,255,0.02); }
+.hidden { display: none !important; }
+
+/* Server tab inner layout */
+.controls { padding: 0 0 10px; }
+.logs { margin-top: 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(255,255,255,0.02); overflow: hidden; }
+.logs-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+pre { margin: 0; padding: 12px; height: 340px; overflow: auto; background: rgba(0,0,0,0.25); font-size: 12px; line-height: 1.35; }
+
+/* DB config tab */
+.db-card { padding: 4px 0; }
+.db-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.55; margin-bottom: 8px; }
+.db-type-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.db-type-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; cursor: pointer; }
+.db-type-opt:has(input:checked) { border-color: rgba(100,180,255,0.45); background: rgba(100,180,255,0.06); }
+.db-type-opt input[type=radio] { margin-top: 3px; flex-shrink: 0; }
+.db-type-label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.db-type-sub { font-size: 11px; opacity: 0.65; }
+.db-opts { margin-top: 4px; }
+.db-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.db-checkbox-row { flex-direction: row !important; align-items: center; gap: 8px; font-size: 12px; }
+.db-actions { display: flex; gap: 10px; margin-top: 16px; }
+.db-status { margin-top: 8px; font-size: 12px; min-height: 18px; }
+.db-status.ok  { color: #4ade80; }
+.db-status.err { color: #f87171; }
+
+/* Shared */
+.row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; opacity: 0.9; }
+input[type=text], input[type=number], input[type=password] { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #e8eefc; font-size: 12px; }
+input[type=number] { width: 100px; }
+button { padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: #e8eefc; cursor: pointer; font-size: 12px; }
+button:hover { background: rgba(255,255,255,0.10); }
+button.primary   { background: rgba(40,200,120,0.25); border-color: rgba(40,200,120,0.55); }
+button.secondary { background: rgba(100,140,255,0.12); border-color: rgba(100,140,255,0.35); }
+button.link { padding: 5px 10px; font-size: 12px; background: transparent; border-color: transparent; }
+button.link:hover { background: rgba(255,255,255,0.06); }
+.hint { margin-top: 8px; font-size: 11px; opacity: 0.65; line-height: 1.5; }
+code { font-family: monospace; font-size: 11px; background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; }
+
+/* IP panel */
+.ip-panel { margin: 10px 0; border: 1px solid rgba(100,180,255,0.18); border-radius: 8px; padding: 10px 14px; background: rgba(100,180,255,0.05); }
+.ip-panel-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; opacity: 0.6; margin-bottom: 8px; }
+.ip-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.ip-row:last-child { border-bottom: none; }
+.ip-label { font-size: 11px; opacity: 0.55; min-width: 110px; flex-shrink: 0; }
+.copy-btn { padding: 2px 8px; font-size: 12px; background: rgba(100,180,255,0.12); border-color: rgba(100,180,255,0.3); border-radius: 5px; }
+.copy-btn:hover { background: rgba(100,180,255,0.22); }
+
+/* Backup rows */
+.backup-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); border-radius: 4px; }
+.backup-row:hover { background: rgba(255,255,255,0.03); }
+.backup-info { display: flex; flex-direction: column; gap: 2px; }
+.backup-name { font-size: 12px; font-family: monospace; }
+.backup-meta { font-size: 11px; opacity: 0.55; }

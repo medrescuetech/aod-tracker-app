@@ -1,0 +1,9 @@
+# SQLite database files — do NOT commit or sync via cloud storage
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.db.tmp
+
+# Database config (contains passwords — keep local only)
+db-config.json

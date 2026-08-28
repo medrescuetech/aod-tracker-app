@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clinic Tracker - Server Controller</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div>
+          <h1>Clinic Tracker — Server Controller</h1>
+          <div class="sub">Start/stop the backend server, configure the database, and manage the system tray.</div>
+        </div>
+        <div class="header-right">
+          <div class="status" id="status">Stopped</div>
+          <button id="btnTray" class="tray-btn" title="Minimize to System Tray">▼ Tray</button>
+        </div>
+      </header>
+
+      <!-- Tab bar -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="server">Server</button>
+        <button class="tab" data-tab="database">Database</button>
+        <button class="tab" data-tab="backup">Backup &amp; Restore</button>
+      </nav>
+
+      <!-- Server tab -->
+      <section class="tab-panel" id="tab-server">
+        <div class="controls">
+          <div class="row">
+            <label>
+              Port
+              <input id="port" type="number" value="8080" min="1" max="65535" />
+            </label>
+            <button id="btnStart">Start</button>
+            <button id="btnStop">Stop</button>
+            <button id="btnOpen">Open Web Page</button>
+          </div>
+          <div class="hint">Tip: If the server crashes, the controller will auto-restart it.</div>
+        </div>
+
+        <!-- Network Access panel -->
+        <div class="ip-panel">
+          <div class="ip-panel-header">
+            <span>Network Access URLs</span>
+            <button id="btnRefreshIPs" class="link">Refresh</button>
+          </div>
+          <div class="ip-row">
+            <span class="ip-label">This machine:</span>
+            <code id="ipLocalhost">http://localhost:8080</code>
+            <button class="copy-btn" data-copy="ipLocalhost" title="Copy">⧉</button>
+          </div>
+          <div id="ipList"></div>
+          <div class="hint" style="margin-top:4px">Share the LAN URL with other devices on the same network.</div>
+        </div>
+
+        <div class="logs">
+          <div class="logs-header">
+            <div>Server Logs</div>
+            <button id="btnClear" class="link">Clear</button>
+          </div>
+          <pre id="log"></pre>
+        </div>
+      </section>
+
+      <!-- Database tab -->
+      <section class="tab-panel hidden" id="tab-database">
+        <div class="db-card">
+          <div class="db-section-title">Database Backend</div>
+
+          <div class="db-type-row">
+            <label class="db-type-opt">
+              <input type="radio" name="dbType" value="sqlite" checked />
+              <span class="db-type-label">
+                <strong>SQLite (Local)</strong>
+                <span class="db-type-sub">Single-file database. Best for single-machine or portable deployments.</span>
+              </span>
+            </label>
+            <label class="db-type-opt">
+              <input type="radio" name="dbType" value="mssql" />
+              <span class="db-type-label">
+                <strong>SQL Server / Azure SQL</strong>
+                <span class="db-type-sub">SQL Server Express, full SQL Server, or Azure SQL. Best for shared / multi-user deployments.</span>
+              </span>
+            </label>
+          </div>
+
+          <!-- SQLite options -->
+          <div id="sqliteOpts" class="db-opts">
+            <div class="db-section-title" style="margin-top:12px">SQLite Settings</div>
+            <div class="row" style="align-items:flex-end;gap:8px">
+              <label style="flex:1">
+                Database File Path
+                <input id="sqlitePath" type="text" placeholder="server/database/aod_tracker.db" style="width:100%" />
+              </label>
+              <button id="btnBrowse" class="secondary">Browse…</button>
+              <button id="btnOpenDir" class="secondary">Open Folder</button>
+            </div>
+          </div>
+
+          <!-- MSSQL options -->
+          <div id="mssqlOpts" class="db-opts hidden">
+            <div class="db-section-title" style="margin-top:12px">SQL Server Settings</div>
+            <div class="db-grid">
+              <label>
+                Host / Server Name
+                <input id="mssqlHost" type="text" placeholder="localhost or .\SQLEXPRESS" />
+              </label>
+              <label>
+                Port
+                <input id="mssqlPort" type="number" value="1433" min="1" max="65535" style="width:100px" />
+              </label>
+              <label>
+                Database Name
+                <input id="mssqlDb" type="text" placeholder="AODTracker" />
+              </label>
+              <label>
+                Username
+                <input id="mssqlUser" type="text" placeholder="sa" />
+              </label>
+              <label>
+                Password
+                <input id="mssqlPass" type="password" placeholder="••••••••" />
+              </label>
+              <label class="db-checkbox-row">
+                <input id="mssqlEncrypt" type="checkbox" />
+                Encrypt connection (recommended for Azure SQL)
+              </label>
+              <label class="db-checkbox-row">
+                <input id="mssqlTrustCert" type="checkbox" checked />
+                Trust server certificate (for self-signed / Express)
+              </label>
+            </div>
+            <div class="hint" style="margin-top:6px">
+              For SQL Server Express use host <code>.\SQLEXPRESS</code> or <code>localhost\SQLEXPRESS</code>.<br>
+              For Azure SQL use <code>yourserver.database.windows.net</code> and enable Encrypt.
+            </div>
+          </div>
+
+          <div class="db-actions">
+            <button id="btnTestConn">Test Connection</button>
+            <button id="btnSaveDb" class="primary">Save Configuration</button>
+          </div>
+          <div id="dbStatus" class="db-status"></div>
+          <div class="hint" style="margin-top:8px">
+            ⚠ Restart the server after changing the database configuration.
+          </div>
+        </div>
+      </section>
+
+      <!-- Backup & Restore tab -->
+      <section class="tab-panel hidden" id="tab-backup">
+        <div class="db-card">
+          <div class="db-section-title">Backup Database</div>
+          <div class="hint" style="margin-bottom:10px">
+            Creates a timestamped copy of the SQLite database file. The server does not need to be stopped.
+          </div>
+          <div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap">
+            <label style="flex:1;min-width:160px">
+              Label <span style="font-weight:normal;color:#888">(optional)</span>
+              <input id="backupLabel" type="text" placeholder="e.g. before-upgrade" style="width:100%" />
+            </label>
+            <label style="flex:2;min-width:200px">
+              Save To Folder
+              <div class="row" style="gap:6px;margin-top:4px">
+                <input id="backupDir" type="text" placeholder="Default: server/database/backups" style="flex:1" readonly />
+                <button id="btnBrowseBackupDir" class="secondary">Browse…</button>
+              </div>
+            </label>
+            <button id="btnBackup" class="primary" style="height:36px">Backup Now</button>
+          </div>
+          <div id="backupStatus" class="db-status" style="margin-top:8px"></div>
+        </div>
+
+        <div class="db-card" style="margin-top:16px">
+          <div class="db-section-title">Restore Database</div>
+          <div class="hint" style="margin-bottom:10px;color:#b45309">
+            ⚠ Restoring will overwrite the current database. A pre-restore backup is created automatically. Stop the server before restoring.
+          </div>
+          <div class="row" style="align-items:flex-end;gap:8px">
+            <label style="flex:1">
+              Backup File
+              <div class="row" style="gap:6px;margin-top:4px">
+                <input id="restorePath" type="text" placeholder="Select a backup file…" style="flex:1" readonly />
+                <button id="btnBrowseRestore" class="secondary">Browse…</button>
+              </div>
+            </label>
+            <button id="btnRestore" style="height:36px;background:#dc2626;color:#fff;border:none;border-radius:6px;padding:0 16px;cursor:pointer;font-size:13px">Restore</button>
+          </div>
+          <div id="restoreStatus" class="db-status" style="margin-top:8px"></div>
+        </div>
+
+        <div class="db-card" style="margin-top:16px">
+          <div class="db-section-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Recent Backups</span>
+            <div style="display:flex;gap:8px">
+              <button id="btnOpenBackupDir" class="secondary" style="font-size:12px;padding:3px 10px">Open Folder</button>
+              <button id="btnRefreshBackups" class="link">Refresh</button>
+            </div>
+          </div>
+          <div id="backupList" style="margin-top:8px"></div>
+        </div>
+      </section>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
