@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AOD Tracker - Server Launcher</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: #1a1a2e;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 30px;
+        }
+        .status.online { background: #d4edda; color: #155724; }
+        .status.offline { background: #f8d7da; color: #721c24; }
+        .status.checking { background: #fff3cd; color: #856404; }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: #e9ecef;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background: #c82333;
+        }
+        .logs {
+            margin-top: 30px;
+            text-align: left;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+            color: #333;
+        }
+        .logs:empty::before {
+            content: 'Logs will appear here...';
+            color: #999;
+            font-style: italic;
+        }
+        .log-entry {
+            margin: 4px 0;
+            padding: 2px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>AOD Tracker</h1>
+        <p class="subtitle">Server Controller</p>
+        
+        <div id="status" class="status checking">
+            <span class="status-dot"></span>
+            <span id="statusText">Checking...</span>
+        </div>
+        
+        <div class="buttons">
+            <button id="btnStart" class="btn-primary" onclick="startServer()" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Start Server
+            </button>
+            
+            <button id="btnStop" class="btn-danger" onclick="stopServer()" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                </svg>
+                Stop Server
+            </button>
+            
+            <button id="btnOpen" class="btn-secondary" onclick="openApp()" disabled>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                Open in Browser
+            </button>
+        </div>
+        
+        <div id="logs" class="logs"></div>
+        
+        <p class="footer">
+            Server URL: http://localhost:8080
+        </p>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080';
+        let checkInterval;
+        
+        function log(msg) {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        async function checkStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/dashboard`, { 
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                if (response.ok) {
+                    setStatus('online');
+                    return true;
+                }
+            } catch (e) {}
+            setStatus('offline');
+            return false;
+        }
+        
+        function setStatus(status) {
+            const el = document.getElementById('status');
+            const text = document.getElementById('statusText');
+            el.className = `status ${status}`;
+            
+            document.getElementById('btnStart').disabled = status === 'online';
+            document.getElementById('btnStop').disabled = status === 'offline';
+            document.getElementById('btnOpen').disabled = status === 'offline';
+            
+            if (status === 'online') {
+                text.textContent = 'Server is running';
+            } else if (status === 'offline') {
+                text.textContent = 'Server is stopped';
+            } else {
+                text.textContent = 'Checking...';
+            }
+        }
+        
+        async function startServer() {
+            log('Starting server...');
+            document.getElementById('btnStart').disabled = true;
+            
+            try {
+                // Try to start via PM2 ecosystem file
+                const response = await fetch('http://localhost:3001/start', { 
+                    method: 'POST',
+                    mode: 'cors'
+                }).catch(() => null);
+                
+                if (!response) {
+                    // Fallback: tell user to run manually
+                    alert('Please start the server manually:\n\ncd server && pm2 start ecosystem.config.cjs\n\nOr:\n\ncd server && node index.js');
+                    log('Server needs manual start. See alert.');
+                    return;
+                }
+                
+                log('Server start command sent');
+                
+                // Wait and check
+                setTimeout(async () => {
+                    await checkStatus();
+                    if (document.getElementById('status').classList.contains('online')) {
+                        log('Server started successfully');
+                        setTimeout(() => openApp(), 500);
+                    } else {
+                        log('Server may still be starting...');
+                    }
+                }, 2000);
+                
+            } catch (err) {
+                log('Error: ' + err.message);
+            }
+        }
+        
+        async function stopServer() {
+            log('Stopping server...');
+            document.getElementById('btnStop').disabled = true;
+            
+            // Note: This requires the PM2 HTTP API or manual stop
+            alert('Please stop the server manually:\n\ncd server && pm2 stop aod-tracker\n\nOr press Ctrl+C in the server window');
+            log('Server needs manual stop. See alert.');
+        }
+        
+        function openApp() {
+            window.open(API_URL, '_blank');
+            log('Opened browser');
+        }
+        
+        // Check status every 5 seconds
+        checkStatus();
+        checkInterval = setInterval(checkStatus, 5000);
+        
+        log('Controller ready');
+    </script>
+</body>
+</html>

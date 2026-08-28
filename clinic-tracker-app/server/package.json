@@ -1,0 +1,39 @@
+{
+  "name": "aod-tracker-server",
+  "version": "1.2.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "cross-env NODE_ENV=test vitest run",
+    "test:watch": "cross-env NODE_ENV=test vitest",
+    "test:auth": "cross-env NODE_ENV=test vitest run test/api.test.js",
+    "test:workflow": "cross-env NODE_ENV=test vitest run test/aod-workflow.test.js",
+    "test:crud": "cross-env NODE_ENV=test vitest run test/aod-crud.test.js",
+    "test:patients": "cross-env NODE_ENV=test vitest run test/patients.test.js",
+    "test:scheduling": "cross-env NODE_ENV=test vitest run test/scheduling.test.js",
+    "test:admin": "cross-env NODE_ENV=test vitest run test/admin.test.js",
+    "test:training": "cross-env NODE_ENV=test vitest run test/training.test.js",
+    "test:referrals": "cross-env NODE_ENV=test vitest run test/referral-options.test.js"
+  },
+  "dependencies": {
+    "7zip-min": "^3.0.1",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.8.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^10.0.4",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^8.0.7",
+    "pdf-parse": "^1.1.1",
+    "sql.js": "^1.10.2",
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "supertest": "^6.3.4",
+    "vitest": "^1.6.0"
+  }
+}

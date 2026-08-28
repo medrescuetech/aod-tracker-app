@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+server/node_modules/
+controller/node_modules/
+
+# Build output
+dist/
+controller/dist/
+electron-launcher/dist/
+
+# Database files
+server/database/*.db
+server/database/*.db.tmp
+server/database/*.db-journal
+server/database/*.db-shm
+server/database/*.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.local
+
+# Test artifacts
+test-results/
+playwright-report/
+e2e/screenshots/
+e2e/**/*-snapshots/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+
+# Misc
+*.tgz
+*.xlsx
+
+# Final build distribution (generated artifact)
+final-build/
+
+# Server log text files
+server/logs/*.txt
+server/logs/*.log

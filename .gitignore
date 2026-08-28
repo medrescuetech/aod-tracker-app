@@ -1,21 +1,53 @@
-# Active package has its own repo
-clinic-tracker-app/
+# Active package
+!clinic-tracker-app/
 
-# Archived / legacy tracker versions
+# Legacy / archive tracker versions
 aod-tracker-app/
 clinical-ai-sidebar/
 V1/
 V2/
 _archive/
 
-# Backups and runtime files
+# Local backups and runtime
 Backups/
 .venv/
 
-# Data files
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.db.tmp
+
+# Logs
+*.log
+server/logs/
+
+# Test artifacts
+test-results/
+playwright-report/
+e2e/screenshots/
+e2e/**/*-snapshots/
+
+# Binary office / data files kept locally
 *.xlsx
 *.pdf
 *.zip
+
+# IDE
+.windsurf/
+.vscode/
+.idea/
 
 # OS files
 Thumbs.db
