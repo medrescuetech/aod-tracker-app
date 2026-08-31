@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, User, FlaskConical, Stethoscope, AlertTriangle, Edit2,
   Calendar, Building2, BadgeCheck, Loader2, ClipboardList, Activity,
-  ChevronRight, Download, GitMerge, X, Search, CheckCircle
+  ChevronRight, Download, GitMerge, X, Search, CheckCircle, Pill
 } from 'lucide-react';
 import api from '../services/api';
 import { useApp } from '../context/AppContext';
@@ -34,7 +34,7 @@ const ResultBadge = ({ value }) => {
   return <span className={`px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{value}</span>;
 };
 
-const TABS = ['Overview', 'AOD Tests', 'Clinic Visits', 'Non-Negatives'];
+const TABS = ['Overview', 'AOD Tests', 'Clinic Visits', 'Non-Negatives', 'Medications'];
 
 const PatientRecord = () => {
   const { id } = useParams();
@@ -45,6 +45,7 @@ const PatientRecord = () => {
   const [tests, setTests] = useState([]);
   const [events, setEvents] = useState([]);
   const [nonNeg, setNonNeg] = useState([]);
+  const [medications, setMedications] = useState([]);
   const [activeTab, setActiveTab] = useState('Overview');
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -94,18 +95,20 @@ const PatientRecord = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [personData, testsData, eventsData, nnData, employersData] = await Promise.all([
+      const [personData, testsData, eventsData, nnData, employersData, medsData] = await Promise.all([
         api.getPerson(id),
         api.getTests({ personId: id }),
         api.getPatientEvents({ personId: id }),
         api.getNonNegativeRecords(null, null, id),
         api.getEmployers(),
+        api.getPersonMedications(id),
       ]);
       setPerson(personData);
       setTests(testsData);
       setEvents(eventsData);
       setNonNeg(nnData);
       setEmployers(employersData);
+      setMedications(medsData?.medications || []);
     } catch (err) {
       console.error('Failed to load patient record:', err);
     } finally {
@@ -137,6 +140,7 @@ const PatientRecord = () => {
     'AOD Tests': tests.length,
     'Clinic Visits': events.length,
     'Non-Negatives': nonNeg.length,
+    'Medications': medications.length,
   };
 
   return (
@@ -225,7 +229,7 @@ const PatientRecord = () => {
                 activeTab === tab
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
+              } ${tab === 'Medications' ? 'hidden' : ''}`}
             >
               {tab}
               {tabCounts[tab] !== undefined && (
@@ -245,6 +249,7 @@ const PatientRecord = () => {
       {activeTab === 'AOD Tests' && <AODTestsTab tests={tests} navigate={navigate} />}
       {activeTab === 'Clinic Visits' && <ClinicVisitsTab events={events} />}
       {activeTab === 'Non-Negatives' && <NonNegTab nonNeg={nonNeg} navigate={navigate} />}
+      {activeTab === 'Medications' && <MedicationsTab medications={medications} />}
 
       {showEditModal && (
         <PatientFormModal
@@ -524,6 +529,43 @@ const NonNegTab = ({ nonNeg, navigate }) => (
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+);
+
+const MedicationsTab = ({ medications }) => (
+  <div className="bg-white rounded-xl shadow-sm border p-5">
+    <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <Pill className="w-4 h-4 text-blue-400" /> Recent Medications
+    </h3>
+    {medications.length === 0 ? (
+      <div className="text-center py-12 text-gray-500">
+        <p>No medication records available.</p>
+        <p className="text-sm text-gray-400 mt-1">Configure MEDICATIONS_API_URL to load external data.</p>
+      </div>
+    ) : (
+      <table className="w-full">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Date</th>
+            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Medication</th>
+            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Dose</th>
+            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Route</th>
+            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Administered by</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {medications.map((m, i) => (
+            <tr key={i} className="hover:bg-gray-50">
+              <td className="px-4 py-3 text-sm text-gray-700">{fmtDate(m.date || m.administeredAt)}</td>
+              <td className="px-4 py-3 text-sm font-medium text-gray-900">{m.name || m.medication}</td>
+              <td className="px-4 py-3 text-sm text-gray-700">{m.dose || '—'}</td>
+              <td className="px-4 py-3 text-sm text-gray-700">{m.route || '—'}</td>
+              <td className="px-4 py-3 text-sm text-gray-700">{m.administeredBy || m.administer || '—'}</td>
             </tr>
           ))}
         </tbody>

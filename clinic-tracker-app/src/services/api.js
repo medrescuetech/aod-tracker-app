@@ -101,6 +101,10 @@ class ApiService {
     return this.request(`/persons/${id}`);
   }
 
+  async getPersonMedications(id) {
+    return this.request(`/persons/${id}/medications`);
+  }
+
   async updatePerson(id, data) {
     return this.request(`/persons/${id}`, {
       method: 'PUT',
@@ -271,6 +275,28 @@ class ApiService {
     return this.request('/admin/app-settings', {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  }
+
+  async getSystemConfig() {
+    return this.request('/admin/settings');
+  }
+
+  async updateSystemConfig(key, value) {
+    return this.request(`/admin/settings/${key}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value }),
+    });
+  }
+
+  async getBackupConfig() {
+    return this.request('/admin/backup-config');
+  }
+
+  async saveBackupConfig(config) {
+    return this.request('/admin/backup-config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
     });
   }
 

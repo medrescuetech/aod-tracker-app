@@ -44,6 +44,120 @@ let isQuitting = false;
 // Get the app directory (parent of electron-launcher)
 const appDir = path.dirname(__dirname);
 const serverScript = path.join(appDir, 'server', 'index.js');
+const logsDir = path.join(appDir, 'server', 'logs');
+const backupsDir = path.join(appDir, 'server', 'database', 'backups');
+
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function getTimestamp() {
+  return new Date().toISOString();
+}
+
+function writeLauncherLog(type, message) {
+  try {
+    ensureDir(logsDir);
+    const line = `[${getTimestamp()}] [${type.toUpperCase()}] ${message}\n`;
+    fs.appendFileSync(path.join(logsDir, 'launcher.log'), line);
+    if (type === 'error') {
+      fs.appendFileSync(path.join(logsDir, 'launcher-errors.log'), line);
+    }
+  } catch {}
+}
+
+function getDbPath() {
+  const envPath = path.join(appDir, '.env');
+  let dbPath = path.join(appDir, 'server', 'database', 'aod_tracker.db');
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8');
+    const match = content.match(/^DB_PATH=(.+)$/m);
+    if (match) dbPath = match[1].trim();
+  }
+  return dbPath;
+}
+
+function getBackupConfig() {
+  const defaults = { enabled: true, time: '03:00', retentionDays: 30, lastBackup: null };
+  try {
+    const p = path.join(appDir, 'server', 'backup-config.json');
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return { ...defaults, ...data };
+    }
+  } catch (err) {
+    writeLauncherLog('error', `Failed to read backup config: ${err.message}`);
+  }
+  return defaults;
+}
+
+function cleanOldBackups() {
+  try {
+    const cfg = getBackupConfig();
+    if (!fs.existsSync(backupsDir)) return;
+    const files = fs.readdirSync(backupsDir).filter(f => f.endsWith('.db'));
+    const cutoff = new Date(Date.now() - cfg.retentionDays * 24 * 60 * 60 * 1000);
+    let removed = 0;
+    for (const f of files) {
+      const p = path.join(backupsDir, f);
+      const st = fs.statSync(p);
+      if (st.mtime < cutoff) {
+        fs.unlinkSync(p);
+        removed++;
+      }
+    }
+    if (removed) writeLauncherLog('info', `Removed ${removed} backup(s) older than ${cfg.retentionDays} days`);
+  } catch (err) {
+    writeLauncherLog('error', `Backup cleanup failed: ${err.message}`);
+  }
+}
+
+function doBackup() {
+  try {
+    const cfg = getBackupConfig();
+    if (!cfg.enabled) {
+      writeLauncherLog('info', 'Automatic backups are disabled; skipping scheduled backup.');
+      return { ok: false, error: 'Backups disabled' };
+    }
+    const dbPath = getDbPath();
+    if (!fs.existsSync(dbPath)) {
+      writeLauncherLog('warn', `Backup skipped: database not found at ${dbPath}`);
+      return { ok: false, error: 'Database not found' };
+    }
+    ensureDir(backupsDir);
+    const now = new Date();
+    const stamp = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
+    const destName = `aod_tracker_backup_${stamp}.db`;
+    const destPath = path.join(backupsDir, destName);
+    fs.copyFileSync(dbPath, destPath);
+    cleanOldBackups();
+    writeLauncherLog('info', `Database backed up to ${destPath}`);
+    const cfgPath = path.join(appDir, 'server', 'backup-config.json');
+    try {
+      fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, lastBackup: new Date().toISOString() }, null, 2));
+    } catch {}
+    return { ok: true, file: destName, path: destPath };
+  } catch (err) {
+    writeLauncherLog('error', `Backup failed: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
+function scheduleNextBackup() {
+  const cfg = getBackupConfig();
+  if (!cfg.enabled) return;
+  const now = new Date();
+  const target = new Date(now);
+  const [h, m] = cfg.time.split(':').map(Number);
+  target.setHours(h || 3, m || 0, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  const delay = target - now;
+  writeLauncherLog('info', `Next backup scheduled for ${cfg.time} (${Math.round(delay / 60000)} minutes)`);
+  setTimeout(() => {
+    doBackup();
+    setInterval(() => { if (getBackupConfig().enabled) doBackup(); }, 24 * 60 * 60 * 1000);
+  }, delay);
+}
 
 // Server configuration
 let SERVER_PORT = parseInt(process.env.PORT || '8080', 10);
@@ -215,6 +329,26 @@ function updateTrayMenu() {
       label: 'Stop Server',
       click: stopServer,
       enabled: isRunning
+    },
+    { type: 'separator' },
+    {
+      label: 'Backup Database Now',
+      click: () => {
+        const result = doBackup();
+        dialog.showMessageBox({
+          type: result.ok ? 'info' : 'error',
+          title: result.ok ? 'Backup Created' : 'Backup Failed',
+          message: result.ok ? `Saved: ${result.file}` : result.error
+        });
+      }
+    },
+    {
+      label: 'Open Backups Folder',
+      click: () => { shell.openPath(backupsDir); }
+    },
+    {
+      label: 'Open Logs Folder',
+      click: () => { shell.openPath(logsDir); }
     }
   ];
   
@@ -304,7 +438,6 @@ function startServer(portRetry = 0) {
   };
 
   // Read .env file if exists
-  const fs = require('fs');
   const envPath = path.join(appDir, '.env');
   if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf8');
@@ -323,8 +456,8 @@ function startServer(portRetry = 0) {
   });
 
   serverProcess.stdout.on('data', (data) => {
-    console.log(`Server: ${data}`);
     const msg = data.toString();
+    writeLauncherLog('info', `server: ${msg.trim()}`);
     if (msg.includes('server running on port') || msg.includes('Server listening') || msg.includes('listening on')) {
       updateStatus('running');
     }
@@ -335,12 +468,12 @@ function startServer(portRetry = 0) {
 
   serverProcess.stderr.on('data', (data) => {
     const errMsg = data.toString();
-    console.error(`Server Error: ${errMsg}`);
+    writeLauncherLog('error', `server stderr: ${errMsg.trim()}`);
     if (window) {
       window.webContents.send('server-log', { type: 'error', message: errMsg.trim() });
     }
     if (errMsg.includes('EADDRINUSE') && portRetry < MAX_PORT_RETRIES) {
-      console.log(`Port ${SERVER_PORT} in use, retrying on ${SERVER_PORT + 1}...`);
+      writeLauncherLog('warn', `Port ${SERVER_PORT} in use, retrying on ${SERVER_PORT + 1}`);
       serverProcess.kill();
       serverProcess = null;
       SERVER_PORT += 1;
@@ -350,7 +483,7 @@ function startServer(portRetry = 0) {
   });
 
   serverProcess.on('close', (code) => {
-    console.log(`Server stopped with code ${code}`);
+    writeLauncherLog('info', `Server process closed (code=${code})`);
     serverProcess = null;
     if (!isQuitting) {
       updateStatus('stopped');
@@ -358,7 +491,7 @@ function startServer(portRetry = 0) {
   });
 
   serverProcess.on('error', (err) => {
-    console.error('Failed to start server process:', err);
+    writeLauncherLog('error', `Failed to start server process: ${err.message}`);
     serverProcess = null;
     updateStatus('error');
   });
@@ -376,13 +509,16 @@ function stopServer() {
     return;
   }
 
+  writeLauncherLog('info', 'Stopping server...');
   updateStatus('stopping');
 
   // Kill the entire process tree
   treeKill(serverProcess.pid, 'SIGTERM', (err) => {
     if (err) {
-      console.error('Failed to kill server:', err);
+      writeLauncherLog('error', `Failed to kill server: ${err.message}`);
       serverProcess.kill('SIGKILL');
+    } else {
+      writeLauncherLog('info', 'Server stopped');
     }
     serverProcess = null;
     updateStatus('stopped');
@@ -425,7 +561,7 @@ ipcMain.on('get-paths', (event) => {
   const logsDir    = path.join(appDir, 'server', 'logs');
   const dbPath     = path.join(appDir, 'server', 'database', 'aod_tracker.db');
   const uploadsDir = path.join(appDir, 'server', 'uploads');
-  const backupsDir = path.join(appDir, 'backups');
+  const backupsDir = path.join(appDir, 'server', 'database', 'backups');
   const envFile    = path.join(appDir, '.env');
   const dbDir      = path.join(appDir, 'server', 'database');
 
@@ -452,6 +588,16 @@ ipcMain.on('get-paths', (event) => {
 // Open a folder in Explorer
 ipcMain.on('open-folder', (event, folderPath) => {
   shell.openPath(folderPath);
+});
+
+// Trigger an immediate database backup
+ipcMain.on('backup-db', (event) => {
+  event.returnValue = doBackup();
+});
+
+// Open the database backups folder
+ipcMain.on('open-backup-dir', () => {
+  shell.openPath(backupsDir);
 });
 
 // Open a file in its default app (Notepad for .log / .env / .txt)
@@ -523,7 +669,8 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   startServer(); // Auto-start server
-  
+  scheduleNextBackup(); // Daily 03:00 database backup
+
   // Check for updates after 5 seconds (give server time to start)
   setTimeout(() => {
     checkForUpdate();

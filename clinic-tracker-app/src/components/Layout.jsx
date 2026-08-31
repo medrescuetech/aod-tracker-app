@@ -10,7 +10,6 @@ import {
   BarChart3, 
   Settings,
   FlaskConical,
-  Clock,
   AlertTriangle,
   Calendar,
   History,
@@ -24,40 +23,99 @@ import {
   Search,
   FolderOpen,
   Beaker,
-  ClipboardList
+  ClipboardList,
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react';
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard',    tip: HELP.nav.dashboard   },
-  { to: '/patients', icon: Stethoscope, label: 'Patient Tracker', tip: HELP.nav.patients  },
-  { to: '/new-test', icon: FlaskConical, label: 'Record Test',   tip: HELP.nav.newTest   },
-  { to: '/tests', icon: History, label: 'AOD History',           tip: HELP.nav.tests     },
-  { to: '/non-negative', icon: AlertTriangle, label: 'Non-Negative', tip: HELP.nav.nonNegative },
-  { to: '/scheduling', icon: Calendar, label: 'Scheduling',     tip: HELP.nav.scheduling },
-  { to: '/patient-search', icon: Search, label: 'Search',         tip: 'Search patients across AOD & clinical records' },
-  { to: '/workers', icon: Users, label: 'Patients',              tip: HELP.nav.workers   },
-  { to: '/employers', icon: Building2, label: 'Employers',       tip: HELP.nav.employers },
-  { to: '/training', icon: GraduationCap, label: 'Training',    tip: HELP.nav.training  },
-  { to: '/checks', icon: ClipboardCheck, label: 'Checks',        tip: HELP.nav.checks    },
-  { to: '/testing', icon: TestTube2, label: 'Testing Mgmt',      tip: HELP.nav.testing   },
-  { to: '/documents', icon: FolderOpen, label: 'Documents',      tip: 'Site documents, policies and reference materials' },
-  { to: '/sds', icon: Beaker, label: 'SDS Manager',             tip: 'Chemical register and Safety Data Sheets' },
-  { to: '/quarterly', icon: ClipboardList, label: 'Quarterly Report', tip: 'Generate the quarterly AOD contractor report' },
-  { to: '/reports', icon: BarChart3, label: 'Reports',           tip: HELP.nav.reports   },
-  { to: '/settings', icon: Settings, label: 'Settings',          tip: HELP.nav.settings  },
-  { to: '/admin', icon: Shield, label: 'Admin',                  tip: HELP.nav.admin     },
+const navGroups = [
+  {
+    id: 'main',
+    label: 'Main',
+    items: [
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', tip: HELP.nav.dashboard },
+    ]
+  },
+  {
+    id: 'patient',
+    label: 'Patient',
+    items: [
+      { to: '/patients', icon: Stethoscope, label: 'Patient Tracker', tip: HELP.nav.patients },
+      { to: '/patient-search', icon: Search, label: 'Search', tip: 'Search patients across AOD & clinical records' },
+      { to: '/workers', icon: Users, label: 'Patients', tip: HELP.nav.workers },
+    ]
+  },
+  {
+    id: 'aod',
+    label: 'AOD',
+    items: [
+      { to: '/new-test', icon: FlaskConical, label: 'Record Test', tip: HELP.nav.newTest },
+      { to: '/tests', icon: History, label: 'AOD History', tip: HELP.nav.tests },
+      { to: '/non-negative', icon: AlertTriangle, label: 'Non-Negative', tip: HELP.nav.nonNegative },
+      { to: '/scheduling', icon: Calendar, label: 'Scheduling', tip: HELP.nav.scheduling },
+    ]
+  },
+  {
+    id: 'site',
+    label: 'Site',
+    items: [
+      { to: '/employers', icon: Building2, label: 'Employers', tip: HELP.nav.employers },
+      { to: '/training', icon: GraduationCap, label: 'Training', tip: HELP.nav.training },
+      { to: '/checks', icon: ClipboardCheck, label: 'Checks', tip: HELP.nav.checks },
+      { to: '/testing', icon: TestTube2, label: 'Testing Mgmt', tip: HELP.nav.testing },
+      { to: '/documents', icon: FolderOpen, label: 'Documents', tip: 'Site documents, policies and reference materials' },
+      { to: '/sds', icon: Beaker, label: 'SDS Manager', tip: 'Chemical register and Safety Data Sheets' },
+    ]
+  },
+  {
+    id: 'reports',
+    label: 'Reports',
+    items: [
+      { to: '/quarterly', icon: ClipboardList, label: 'Quarterly Report', tip: 'Generate the quarterly AOD contractor report' },
+      { to: '/reports', icon: BarChart3, label: 'Reports', tip: HELP.nav.reports },
+    ]
+  },
+  {
+    id: 'system',
+    label: 'System',
+    items: [
+      { to: '/settings', icon: Settings, label: 'Settings', tip: HELP.nav.settings },
+      { to: '/admin', icon: Shield, label: 'Admin', tip: HELP.nav.admin },
+    ]
+  },
 ];
+
+function getActiveGroupId(pathname) {
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      if (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)) {
+        return group.id;
+      }
+    }
+  }
+  return null;
+}
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
-  // Close sidebar when route changes on mobile
+  const [openGroups, setOpenGroups] = useState(() => {
+    const id = getActiveGroupId(location.pathname);
+    return new Set(id ? [id] : []);
+  });
+
+  useEffect(() => {
+    const id = getActiveGroupId(location.pathname);
+    if (id) {
+      setOpenGroups(prev => new Set([...prev, id]));
+    }
+  }, [location.pathname]);
+
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
 
-  // Close sidebar when clicking outside on mobile
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
@@ -67,6 +125,15 @@ const Layout = ({ children }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const toggleGroup = (id) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -112,24 +179,63 @@ const Layout = ({ children }) => {
         
         <nav className="flex-1 p-4 overflow-y-auto">
           <ul className="space-y-1">
-            {navItems.map(({ to, icon: Icon, label, tip }) => (
-              <li key={to}>
-                <Tooltip text={tip} position="right" width="max-w-sm">
-                  <NavLink
-                    to={to}
-                    onClick={() => setSidebarOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-slate-300 hover:bg-slate-700'
-                      }`
-                    }
-                  >
-                    <Icon size={20} />
-                    <span className="text-sm">{label}</span>
-                  </NavLink>
-                </Tooltip>
+            {navGroups.map((group) => (
+              <li key={group.id} className="mb-1">
+                {group.items.length === 1 ? (() => {
+                  const { to, icon: Icon, label, tip } = group.items[0];
+                  return (
+                    <Tooltip text={tip} position="right" width="max-w-sm">
+                      <NavLink
+                        to={to}
+                        onClick={() => setSidebarOpen(false)}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                            isActive
+                              ? 'bg-blue-600 text-white'
+                              : 'text-slate-300 hover:bg-slate-700'
+                          }`
+                        }
+                      >
+                        <Icon size={20} />
+                        <span className="text-sm">{label}</span>
+                      </NavLink>
+                    </Tooltip>
+                  );
+                })() : (
+                  <>
+                    <button
+                      onClick={() => toggleGroup(group.id)}
+                      className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                      <span className="text-sm font-medium">{group.label}</span>
+                      {openGroups.has(group.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                    {openGroups.has(group.id) && (
+                      <ul className="mt-1 ml-4 space-y-1">
+                        {group.items.map(({ to, icon: Icon, label, tip }) => (
+                          <li key={to}>
+                            <Tooltip text={tip} position="right" width="max-w-sm">
+                              <NavLink
+                                to={to}
+                                onClick={() => setSidebarOpen(false)}
+                                className={({ isActive }) =>
+                                  `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                                    isActive
+                                      ? 'bg-blue-600 text-white'
+                                      : 'text-slate-300 hover:bg-slate-700'
+                                  }`
+                                }
+                              >
+                                <Icon size={18} />
+                                <span className="text-sm">{label}</span>
+                              </NavLink>
+                            </Tooltip>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
               </li>
             ))}
           </ul>

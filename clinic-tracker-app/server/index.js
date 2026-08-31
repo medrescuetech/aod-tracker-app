@@ -1049,13 +1049,14 @@ app.post('/api/auth/login', (req, res) => {
   logger.auth('Login', true, { username, ip: req.ip });
 
   const roleName = (user.RoleName || 'user').toLowerCase();
+  const sessionTimeout = parseInt(queryOne("SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = 'SESSION_TIMEOUT'")?.ConfigValue || '480', 10);
   const token = jwt.sign({
     userId: user.UserID,
     username: user.Username,
     role: roleName,
     isClinician: !!user.IsClinician,
     permissions: JSON.parse(user.Permissions || '[]')
-  }, JWT_SECRET, { expiresIn: '8h' });
+  }, JWT_SECRET, { expiresIn: Math.max(15, sessionTimeout) * 60 });
 
   const displayName = user.DisplayName || (user.FirstName && user.LastName ? `${user.FirstName.charAt(0)} ${user.LastName}` : user.FullName || user.Username);
 
@@ -2018,6 +2019,49 @@ app.get('/api/persons/:id/history', (req, res) => {
       dnaRecords
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// External medication integration (patient viewer)
+// Configure MEDICATIONS_API_URL and MEDICATIONS_API_KEY to proxy to another tool.
+app.get('/api/persons/:id/medications', async (req, res) => {
+  try {
+    const person = queryOne('SELECT PersonID, FullName, DateOfBirth, BadgeNumber, EmployeeNumber FROM Person WHERE PersonID = ?', [req.params.id]);
+    if (!person) return res.status(404).json({ error: 'Person not found' });
+
+    const getCfg = (key) => (queryOne('SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = ?', [key])?.ConfigValue) || process.env[key] || '';
+    const apiUrl = getCfg('MEDICATIONS_API_URL');
+    const apiKey = getCfg('MEDICATIONS_API_KEY');
+    const enabled = (getCfg('MEDICATIONS_API_ENABLED') || 'false').toLowerCase() === 'true';
+
+    if (!enabled || !apiUrl) {
+      return res.json({ source: null, medications: [] });
+    }
+
+    const params = new URLSearchParams();
+    if (person.BadgeNumber) params.append('badge', person.BadgeNumber);
+    if (person.EmployeeNumber) params.append('employeeNumber', person.EmployeeNumber);
+    if (person.FullName) params.append('name', person.FullName);
+    if (person.DateOfBirth) params.append('dob', person.DateOfBirth);
+
+    const response = await fetch(`${apiUrl}?${params.toString()}`, {
+      headers: {
+        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ error: 'Medications API returned an error', status: response.status });
+    }
+
+    const data = await response.json();
+    res.json({
+      source: apiUrl,
+      medications: Array.isArray(data) ? data : (data.medications || []),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Compute the Overall AOD Result from drug + BAC outcomes
@@ -4353,11 +4397,18 @@ app.get('/api/users/:id', (req, res) => {
   res.json(user);
 });
 
+function getPasswordMinLength() {
+  return parseInt(queryOne("SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = 'PASSWORD_MIN_LENGTH'")?.ConfigValue || '8', 10);
+}
+
 app.post('/api/users', (req, res) => {
   const { username, password, firstName, lastName, fullName, email, uniqueId,
           roleId, isClinician, credentials, isActive } = req.body;
   if (!username) return res.status(400).json({ error: 'username is required' });
   if (!password) return res.status(400).json({ error: 'password is required' });
+
+  const minLen = getPasswordMinLength();
+  if (password.length < minLen) return res.status(400).json({ error: `Password must be at least ${minLen} characters` });
 
   const derivedFullName = fullName || [firstName, lastName].filter(Boolean).join(' ') || username;
 
@@ -4389,6 +4440,8 @@ app.put('/api/users/:id', (req, res) => {
     || existing.FullName;
 
   if (password) {
+    const minLen = getPasswordMinLength();
+    if (password.length < minLen) return res.status(400).json({ error: `Password must be at least ${minLen} characters` });
     run('UPDATE User SET PasswordHash=? WHERE UserID=?', [bcrypt.hashSync(password, 10), req.params.id]);
   }
 
@@ -6942,6 +6995,36 @@ app.put('/api/admin/settings/:key', adminAuth, (req, res) => {
   res.json({ message: 'Setting updated', key, value });
 });
 
+// Backup configuration for the server manager EXE
+const getBackupConfigPath = () => join(__dirname, 'backup-config.json');
+const getBackupConfig = () => {
+  const defaults = { enabled: true, time: '03:00', retentionDays: 30, lastBackup: null };
+  try {
+    const p = getBackupConfigPath();
+    if (existsSync(p)) {
+      const data = JSON.parse(readFileSync(p, 'utf8'));
+      return { ...defaults, ...data };
+    }
+  } catch (err) { logger.error('Failed to read backup config', { error: err.message }); }
+  return defaults;
+};
+
+app.get('/api/admin/backup-config', adminAuth, (req, res) => {
+  res.json(getBackupConfig());
+});
+
+app.put('/api/admin/backup-config', adminAuth, (req, res) => {
+  try {
+    const current = getBackupConfig();
+    const next = { ...current, ...req.body };
+    writeFileSync(getBackupConfigPath(), JSON.stringify(next, null, 2));
+    logger.info('Backup config updated', { next });
+    res.json({ ok: true, config: next });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Employee/Contractor classification patterns
 app.get('/api/admin/classification-patterns', adminAuth, (req, res) => {
   const patterns = queryOne("SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = 'EMPLOYEE_PATTERNS'");
@@ -7023,6 +7106,21 @@ async function fireEmailRules(trigger, testId) {
         subject,
         triggerLabel: rule.label || trigger,
       }).catch(err => logger.warn('Auto-email failed', { ruleId: rule.id, testId, error: err.message }));
+    }
+
+    // Fallback default notification for non-negative AOD results
+    if (trigger === 'non-negative' && test.IsNonNegative) {
+      const notifyDefault = (queryOne("SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = 'NOTIFY_NON_NEGATIVE'")?.ConfigValue || 'false').toLowerCase() === 'true';
+      const defaultEmail = queryOne("SELECT ConfigValue FROM SystemConfig WHERE ConfigKey = 'DEFAULT_NOTIFICATION_EMAIL'")?.ConfigValue;
+      if (notifyDefault && defaultEmail && !rules.some(r => r.enabled && r.trigger === trigger)) {
+        const subject = `AOD non-negative result - ${test.TestNumber || ''} - ${test.PersonName || ''}`;
+        sendTestEmail({
+          testId,
+          to: defaultEmail,
+          subject,
+          triggerLabel: 'non-negative (default)',
+        }).catch(err => logger.warn('Default auto-email failed', { testId, error: err.message }));
+      }
     }
   } catch (err) {
     logger.warn('fireEmailRules error', { trigger, testId, error: err.message });

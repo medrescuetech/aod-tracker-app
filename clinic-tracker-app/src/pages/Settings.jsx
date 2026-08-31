@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings as SettingsIcon, Database, Users, UserPlus, Loader2, X, Shield, Edit2, Trash2, GraduationCap, Plus, ChevronDown, Stethoscope, Check, GitMerge, Mail, CheckCircle, AlertCircle, Eye, EyeOff, Download, Upload } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Users, UserPlus, Loader2, X, Shield, Edit2, Trash2, GraduationCap, Plus, ChevronDown, Stethoscope, Check, GitMerge, Mail, CheckCircle, AlertCircle, Eye, EyeOff, Download, Upload, Pill, Bell } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import api from '../services/api';
 import { CsvImportModal } from './Employers';
@@ -126,6 +126,41 @@ const Settings = () => {
   const [smtpTestTo, setSmtpTestTo]   = useState('');
   const [showPass, setShowPass]       = useState(false);
 
+  // Integrations tab state
+  const INTEGRATION_DEFAULTS = { medicationsApiUrl: '', medicationsApiKey: '', medicationsApiEnabled: false };
+  const [integrations, setIntegrations] = useState(INTEGRATION_DEFAULTS);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsSaving, setIntegrationsSaving] = useState(false);
+  const [integrationsStatus, setIntegrationsStatus] = useState(null);
+
+  // Backups tab state
+  const BACKUP_DEFAULTS = { enabled: true, time: '03:00', retentionDays: 30 };
+  const [backups, setBackups] = useState(BACKUP_DEFAULTS);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [backupsSaving, setBackupsSaving] = useState(false);
+  const [backupsStatus, setBackupsStatus] = useState(null);
+
+  // Security tab state
+  const SECURITY_DEFAULTS = { sessionTimeout: 480, passwordMinLength: 8 };
+  const [security, setSecurity] = useState(SECURITY_DEFAULTS);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securitySaving, setSecuritySaving] = useState(false);
+  const [securityStatus, setSecurityStatus] = useState(null);
+
+  // Notifications tab state
+  const NOTIFICATION_DEFAULTS = { defaultEmail: '', notifyNonNegative: false };
+  const [notifications, setNotifications] = useState(NOTIFICATION_DEFAULTS);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsSaving, setNotificationsSaving] = useState(false);
+  const [notificationsStatus, setNotificationsStatus] = useState(null);
+
+  // System tab state
+  const SYSTEM_DEFAULTS = { companyName: 'SCJV', employeeLabel: 'Employees', labName: 'Testing Laboratory', bacPositive: 0.05, bacNonneg: 0.02 };
+  const [system, setSystem] = useState(SYSTEM_DEFAULTS);
+  const [systemLoading, setSystemLoading] = useState(false);
+  const [systemSaving, setSystemSaving] = useState(false);
+  const [systemStatus, setSystemStatus] = useState(null);
+
   // Load static data once on mount
   useEffect(() => { loadStaticData(); }, []);
   // Re-fetch users whenever inactive filter changes
@@ -133,6 +168,11 @@ const Settings = () => {
   useEffect(() => { if (activeTab === 'training') loadTraining(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'patient') loadPatientLists(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'email') loadSmtp(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'integrations') loadIntegrations(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'backups') loadBackups(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'security') loadSecurity(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'notifications') loadNotifications(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'system') loadSystem(); }, [activeTab]);
 
   const loadSmtp = async () => {
     setSmtpLoading(true);
@@ -168,6 +208,153 @@ const Settings = () => {
       setSmtpStatus({ ok: true, msg: result.message });
     } catch (err) { setSmtpStatus({ ok: false, msg: err.message }); }
     finally { setSmtpTesting(false); }
+  };
+
+  const loadIntegrations = async () => {
+    setIntegrationsLoading(true);
+    try {
+      const rows = await api.getSystemConfig();
+      const map = (rows || []).reduce((acc, r) => { acc[r.ConfigKey] = r.ConfigValue; return acc; }, {});
+      setIntegrations({
+        medicationsApiUrl: map.MEDICATIONS_API_URL || '',
+        medicationsApiKey: map.MEDICATIONS_API_KEY || '',
+        medicationsApiEnabled: (map.MEDICATIONS_API_ENABLED || 'false').toLowerCase() === 'true',
+      });
+    } catch (err) { console.error(err); }
+    finally { setIntegrationsLoading(false); }
+  };
+
+  const saveIntegrations = async () => {
+    setIntegrationsSaving(true); setIntegrationsStatus(null);
+    try {
+      await Promise.all([
+        api.updateSystemConfig('MEDICATIONS_API_URL', integrations.medicationsApiUrl.trim()),
+        api.updateSystemConfig('MEDICATIONS_API_KEY', integrations.medicationsApiKey.trim()),
+        api.updateSystemConfig('MEDICATIONS_API_ENABLED', integrations.medicationsApiEnabled ? 'true' : 'false'),
+      ]);
+      setIntegrationsStatus({ ok: true, msg: 'Integration settings saved.' });
+    } catch (err) {
+      setIntegrationsStatus({ ok: false, msg: err.message });
+    } finally {
+      setIntegrationsSaving(false);
+    }
+  };
+
+  const loadBackups = async () => {
+    setBackupsLoading(true);
+    try {
+      const cfg = await api.getBackupConfig();
+      setBackups({ ...BACKUP_DEFAULTS, ...cfg });
+    } catch (err) { console.error(err); }
+    finally { setBackupsLoading(false); }
+  };
+
+  const saveBackups = async () => {
+    setBackupsSaving(true); setBackupsStatus(null);
+    try {
+      const days = parseInt(backups.retentionDays, 10);
+      if (isNaN(days) || days < 1) throw new Error('Retention days must be at least 1');
+      await api.saveBackupConfig({
+        enabled: backups.enabled,
+        time: backups.time,
+        retentionDays: days,
+      });
+      setBackupsStatus({ ok: true, msg: 'Backup schedule saved. The server manager will pick this up on its next start.' });
+    } catch (err) {
+      setBackupsStatus({ ok: false, msg: err.message });
+    } finally { setBackupsSaving(false); }
+  };
+
+  const loadSecurity = async () => {
+    setSecurityLoading(true);
+    try {
+      const rows = await api.getSystemConfig();
+      const map = (rows || []).reduce((acc, r) => { acc[r.ConfigKey] = r.ConfigValue; return acc; }, {});
+      setSecurity({
+        sessionTimeout: parseInt(map.SESSION_TIMEOUT || 480, 10),
+        passwordMinLength: parseInt(map.PASSWORD_MIN_LENGTH || 8, 10),
+      });
+    } catch (err) { console.error(err); }
+    finally { setSecurityLoading(false); }
+  };
+
+  const saveSecurity = async () => {
+    setSecuritySaving(true); setSecurityStatus(null);
+    try {
+      const session = parseInt(security.sessionTimeout, 10);
+      const minLen = parseInt(security.passwordMinLength, 10);
+      if (isNaN(session) || session < 15) throw new Error('Session timeout must be at least 15 minutes');
+      if (isNaN(minLen) || minLen < 4) throw new Error('Password minimum length must be at least 4');
+      await Promise.all([
+        api.updateSystemConfig('SESSION_TIMEOUT', String(session)),
+        api.updateSystemConfig('PASSWORD_MIN_LENGTH', String(minLen)),
+      ]);
+      setSecurityStatus({ ok: true, msg: 'Security settings saved.' });
+    } catch (err) {
+      setSecurityStatus({ ok: false, msg: err.message });
+    } finally { setSecuritySaving(false); }
+  };
+
+  const loadNotifications = async () => {
+    setNotificationsLoading(true);
+    try {
+      const rows = await api.getSystemConfig();
+      const map = (rows || []).reduce((acc, r) => { acc[r.ConfigKey] = r.ConfigValue; return acc; }, {});
+      setNotifications({
+        defaultEmail: map.DEFAULT_NOTIFICATION_EMAIL || '',
+        notifyNonNegative: (map.NOTIFY_NON_NEGATIVE || 'false').toLowerCase() === 'true',
+      });
+    } catch (err) { console.error(err); }
+    finally { setNotificationsLoading(false); }
+  };
+
+  const saveNotifications = async () => {
+    setNotificationsSaving(true); setNotificationsStatus(null);
+    try {
+      await Promise.all([
+        api.updateSystemConfig('DEFAULT_NOTIFICATION_EMAIL', notifications.defaultEmail.trim()),
+        api.updateSystemConfig('NOTIFY_NON_NEGATIVE', notifications.notifyNonNegative ? 'true' : 'false'),
+      ]);
+      setNotificationsStatus({ ok: true, msg: 'Notification settings saved.' });
+    } catch (err) {
+      setNotificationsStatus({ ok: false, msg: err.message });
+    } finally { setNotificationsSaving(false); }
+  };
+
+  const loadSystem = async () => {
+    setSystemLoading(true);
+    try {
+      const rows = await api.getSystemConfig();
+      const map = (rows || []).reduce((acc, r) => { acc[r.ConfigKey] = r.ConfigValue; return acc; }, {});
+      setSystem({
+        companyName: map.COMPANY_NAME || 'SCJV',
+        employeeLabel: map.EMPLOYEE_LABEL || 'Employees',
+        labName: map.LAB_NAME || 'Testing Laboratory',
+        bacPositive: parseFloat(map.BAC_POSITIVE_THRESHOLD || '0.05'),
+        bacNonneg: parseFloat(map.BAC_NONNEG_THRESHOLD || '0.02'),
+      });
+    } catch (err) { console.error(err); }
+    finally { setSystemLoading(false); }
+  };
+
+  const saveSystem = async () => {
+    setSystemSaving(true); setSystemStatus(null);
+    try {
+      const pos = parseFloat(system.bacPositive);
+      const nonneg = parseFloat(system.bacNonneg);
+      if (isNaN(pos) || pos < 0) throw new Error('BAC positive threshold is invalid');
+      if (isNaN(nonneg) || nonneg < 0) throw new Error('BAC non-negative threshold is invalid');
+      await Promise.all([
+        api.updateSystemConfig('COMPANY_NAME', system.companyName.trim()),
+        api.updateSystemConfig('EMPLOYEE_LABEL', system.employeeLabel.trim()),
+        api.updateSystemConfig('LAB_NAME', system.labName.trim()),
+        api.updateSystemConfig('BAC_POSITIVE_THRESHOLD', String(pos)),
+        api.updateSystemConfig('BAC_NONNEG_THRESHOLD', String(nonneg)),
+      ]);
+      setSystemStatus({ ok: true, msg: 'System settings saved.' });
+    } catch (err) {
+      setSystemStatus({ ok: false, msg: err.message });
+    } finally { setSystemSaving(false); }
   };
 
   const loadStaticData = async () => {
@@ -300,10 +487,15 @@ const Settings = () => {
   };
 
   const TABS = [
-    { id: 'general',  label: 'General',        icon: <SettingsIcon className="w-4 h-4" /> },
-    { id: 'patient',  label: 'Patient Lists',   icon: <Stethoscope className="w-4 h-4" /> },
-    { id: 'training', label: 'Training Lists',  icon: <GraduationCap className="w-4 h-4" /> },
-    { id: 'email',    label: 'Email / SMTP',    icon: <Mail className="w-4 h-4" /> },
+    { id: 'general',      label: 'General',        icon: <SettingsIcon className="w-4 h-4" /> },
+    { id: 'patient',      label: 'Patient Lists',   icon: <Stethoscope className="w-4 h-4" /> },
+    { id: 'training',     label: 'Training Lists',  icon: <GraduationCap className="w-4 h-4" /> },
+    { id: 'integrations', label: 'Integrations',    icon: <Pill className="w-4 h-4" /> },
+    { id: 'backups',      label: 'Backups',         icon: <Database className="w-4 h-4" /> },
+    { id: 'security',     label: 'Security',        icon: <Shield className="w-4 h-4" /> },
+    { id: 'notifications',label: 'Notifications',   icon: <Bell className="w-4 h-4" /> },
+    { id: 'system',       label: 'System',          icon: <SettingsIcon className="w-4 h-4" /> },
+    { id: 'email',        label: 'Email / SMTP',    icon: <Mail className="w-4 h-4" /> },
   ];
 
   if (loading && activeTab === 'general') {
@@ -825,6 +1017,304 @@ const Settings = () => {
                 Save Settings
               </button>
             </div>
+          </div>
+        )
+      )}
+
+      {/* ── Integrations Tab ── */}
+      {activeTab === 'integrations' && (
+        integrationsLoading ? (
+          <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><Pill className="w-5 h-5" /> Medications Integration</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Display recent medications from an external clinical system on the patient viewer.</p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <div className={`relative w-11 h-6 rounded-full transition-colors ${integrations.medicationsApiEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    onClick={() => setIntegrations(s => ({ ...s, medicationsApiEnabled: !s.medicationsApiEnabled }))}>
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${integrations.medicationsApiEnabled ? 'translate-x-5' : ''}`} />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{integrations.medicationsApiEnabled ? 'Enabled' : 'Disabled'}</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <h3 className="font-semibold text-gray-800">External API Connection</h3>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint URL</label>
+                <input value={integrations.medicationsApiUrl}
+                  onChange={e => setIntegrations(s => ({ ...s, medicationsApiUrl: e.target.value }))}
+                  placeholder="https://meds.example.com/api/medications"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                <input type="password" value={integrations.medicationsApiKey}
+                  onChange={e => setIntegrations(s => ({ ...s, medicationsApiKey: e.target.value }))}
+                  placeholder="Leave blank to keep existing"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={saveIntegrations} disabled={integrationsSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                {integrationsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save Settings
+              </button>
+            </div>
+
+            {integrationsStatus && (
+              <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 ${
+                integrationsStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {integrationsStatus.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {integrationsStatus.msg}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {/* ── Backups Tab ── */}
+      {activeTab === 'backups' && (
+        backupsLoading ? (
+          <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><Database className="w-5 h-5" /> Automatic Database Backups</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">The server manager will copy the live database each day to the backups folder.</p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <div className={`relative w-11 h-6 rounded-full transition-colors ${backups.enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    onClick={() => setBackups(s => ({ ...s, enabled: !s.enabled }))}>
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${backups.enabled ? 'translate-x-5' : ''}`} />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{backups.enabled ? 'Enabled' : 'Disabled'}</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <h3 className="font-semibold text-gray-800">Schedule</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Daily Backup Time</label>
+                  <input type="time" value={backups.time}
+                    onChange={e => setBackups(s => ({ ...s, time: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Keep Backups For (days)</label>
+                  <input type="number" min={1} value={backups.retentionDays}
+                    onChange={e => setBackups(s => ({ ...s, retentionDays: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={saveBackups} disabled={backupsSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                {backupsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save Backup Schedule
+              </button>
+            </div>
+
+            {backupsStatus && (
+              <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 ${
+                backupsStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {backupsStatus.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {backupsStatus.msg}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {/* ── Security Tab ── */}
+      {activeTab === 'security' && (
+        securityLoading ? (
+          <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><Shield className="w-5 h-5" /> Authentication</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Control session length and password requirements.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Session Timeout (minutes)</label>
+                  <input type="number" min={15} value={security.sessionTimeout}
+                    onChange={e => setSecurity(s => ({ ...s, sessionTimeout: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                  <p className="text-xs text-gray-400 mt-1">How long before an idle login expires. Default: 480 minutes (8 hours).</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Password Length</label>
+                  <input type="number" min={4} value={security.passwordMinLength}
+                    onChange={e => setSecurity(s => ({ ...s, passwordMinLength: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                  <p className="text-xs text-gray-400 mt-1">Applies to new and changed passwords.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={saveSecurity} disabled={securitySaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                {securitySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save Security Settings
+              </button>
+            </div>
+
+            {securityStatus && (
+              <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 ${
+                securityStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {securityStatus.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {securityStatus.msg}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {/* ── Notifications Tab ── */}
+      {activeTab === 'notifications' && (
+        notificationsLoading ? (
+          <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><Bell className="w-5 h-5" /> Non-Negative Alerts</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">Send an automatic email whenever an AOD test is recorded as non-negative.</p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <div className={`relative w-11 h-6 rounded-full transition-colors ${notifications.notifyNonNegative ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    onClick={() => setNotifications(s => ({ ...s, notifyNonNegative: !s.notifyNonNegative }))}>
+                    <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${notifications.notifyNonNegative ? 'translate-x-5' : ''}`} />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{notifications.notifyNonNegative ? 'Enabled' : 'Disabled'}</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Default Notification Email</label>
+                <input type="email" value={notifications.defaultEmail}
+                  onChange={e => setNotifications(s => ({ ...s, defaultEmail: e.target.value }))}
+                  placeholder="safety@example.com"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                <p className="text-xs text-gray-400 mt-1">Used when no custom email rule matches.</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={saveNotifications} disabled={notificationsSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                {notificationsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save Notifications
+              </button>
+            </div>
+
+            {notificationsStatus && (
+              <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 ${
+                notificationsStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {notificationsStatus.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {notificationsStatus.msg}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {/* ── System Tab ── */}
+      {activeTab === 'system' && (
+        systemLoading ? (
+          <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+        ) : (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><SettingsIcon className="w-5 h-5" /> Organisation &amp; Defaults</h2>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                  <input value={system.companyName}
+                    onChange={e => setSystem(s => ({ ...s, companyName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee Label</label>
+                  <input value={system.employeeLabel}
+                    onChange={e => setSystem(s => ({ ...s, employeeLabel: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Lab Name</label>
+                  <input value={system.labName}
+                    onChange={e => setSystem(s => ({ ...s, labName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <h3 className="font-semibold text-gray-800">BAC Thresholds</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Positive Threshold (%)</label>
+                  <input type="number" step="0.001" value={system.bacPositive}
+                    onChange={e => setSystem(s => ({ ...s, bacPositive: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Non-Negative Threshold (%)</label>
+                  <input type="number" step="0.001" value={system.bacNonneg}
+                    onChange={e => setSystem(s => ({ ...s, bacNonneg: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button onClick={saveSystem} disabled={systemSaving}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                {systemSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save System Settings
+              </button>
+            </div>
+
+            {systemStatus && (
+              <div className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 ${
+                systemStatus.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {systemStatus.ok ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {systemStatus.msg}
+              </div>
+            )}
           </div>
         )
       )}
