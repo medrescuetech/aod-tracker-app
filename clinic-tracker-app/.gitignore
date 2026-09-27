@@ -47,10 +47,32 @@ __pycache__/
 # Misc
 *.tgz
 *.xlsx
+*.zip
 
 # Final build distribution (generated artifact)
 final-build/
 
+# Old update packages
+_update_v*/
+
+# Archive folder (local reference only)
+archive/
+
+# Local backups (managed by server)
+backups/
+server/backups/
+
+# Temp/one-off scripts
+server/inspect-*.js
+server/cleanup-*.js
+server/setup-chemical-table.js
+
 # Server log text files
 server/logs/*.txt
 server/logs/*.log
+
+# Controller dist (built artifact, ~450MB)
+controller/dist/
+
+# PDF files (local reference)
+*.pdf
